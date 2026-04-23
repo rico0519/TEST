@@ -12,7 +12,7 @@
 
 ## 一、系統架構總覽
 
-本系統為一套前後端分離的 AI 運維助理平台，整合 Azure OpenAI（ChatGPT）、Azure AI Search、Embeddings 向量化技術，並搭配完整的使用者介面與後台管理系統，提供查詢內部知識庫、即時伺服器狀態查詢、以及服務重啟等 API 指令能力。
+本系統為一套前後端分離的AI 運維助理平台，整合ChatGPT、AI Search、Embeddings 向量化技術，並搭配完整的使用者介面與後台管理系統，提供查詢內部知識庫、即時伺服器狀態查詢、以及服務重啟等 API 指令能力。
 
 ### 系統四大模組
 
@@ -21,7 +21,7 @@
 | **Chat（聊天介面）** | 使用者互動端，含機器人對話 UI | 一般使用者 |
 | **Frontend（後台管理）** | Bot 管理、使用者權限、資料分析 | 系統管理員 |
 | **Chat-API** | 機器人對話邏輯、AI 串接、Embedding、對話紀錄 | 內部服務 |
-| **Backend-API** | Azure Blob、AI Search、Indexer、監控 API | 內部服務 |
+| **Backend-API** | Blob、AI Search、Indexer、監控 API | 內部服務 |
 
 ---
 
@@ -33,7 +33,6 @@
 
 - 💬 **閒聊（Chit-chat）**：一般對話，不需呼叫任何工具
 - 📖 **查文件（RAG）**：查詢內部 Wiki / 知識庫
-- ⚙️ **執行 API 指令（Action）**：查詢伺服器狀態、重啟服務等高權限操作
 
 ### System Prompt 設計策略
 
@@ -46,34 +45,17 @@
 
 【模式二：查文件】
 - 觸發條件：詢問系統說明、功能介紹、操作步驟、錯誤排查等知識性問題
-- 行動：呼叫 search_wiki 工具，從知識庫檢索後回答
+- 行動：呼叫 search工具，從知識庫檢索後回答
 - 範例關鍵字：「怎麼做」、「是什麼」、「如何設定」、「說明」
 
 【模式三：執行 API 指令】
 - 觸發條件：要求查詢伺服器狀態、重啟服務、查看負載等操作型請求
 - 行動：呼叫對應 API 工具，執行前必須確認使用者意圖
 - 範例關鍵字：「重啟」、「伺服器狀態」、「CPU 使用率」、「重新啟動」
-- ⚠️ 高風險指令需二次確認後方可執行
 
 請先判斷模式，再執行對應行動。若無法判斷，請向使用者確認。
 ```
 
-### 意圖路由流程
-
-```mermaid
-flowchart TD
-    A[使用者輸入] --> B{意圖分類}
-    B -->|閒聊| C[直接回覆]
-    B -->|查文件| D[呼叫 search_wiki]
-    B -->|執行指令| E{是否高風險？}
-    D --> F[向量檢索 Azure AI Search]
-    F --> G[回傳參考文件 + 生成回答]
-    E -->|否| H[呼叫 API 執行]
-    E -->|是| I[請使用者二次確認]
-    I -->|確認| H
-    I -->|取消| J[取消執行]
-    H --> K[回傳執行結果]
-```
 
 ---
 
@@ -85,11 +67,11 @@ flowchart TD
 
 ### 優化策略
 
-#### 1. Hybrid Search（混合搜尋）
+#### 1. 混合搜尋
 
 結合關鍵字搜尋（BM25）與向量語意搜尋，兩者分數加權合併排名（RRF, Reciprocal Rank Fusion），同時捕捉關鍵詞精確匹配與語意相似度。
 
-本系統已整合 **Azure AI Search** 的 Hybrid Search 功能實現此策略。
+本系統已整合 **AI Search** 的 Hybrid Search 功能實現此策略。
 
 #### 2. Chunk 策略優化
 
@@ -117,12 +99,12 @@ flowchart TD
 flowchart LR
     A[使用者問題] --> B[Query 擴展 / 改寫]
     B --> C[Embedding 向量化]
-    C --> D[Azure AI Search]
+    C --> D[AI Search]
     D --> E[Hybrid Search\nBM25 + Vector]
     E --> F[Re-ranking]
     F --> G[Top-K Chunks]
     G --> H[組合 Prompt]
-    H --> I[Azure OpenAI GPT]
+    H --> I[OpenAI GPT]
     I --> J[回答 + 引用來源]
 ```
 
@@ -130,9 +112,6 @@ flowchart LR
 
 ## 四、安全性與權限控管
 
-### 設計原則
-
-高風限 API（如重啟伺服器）若被誤觸或惡意呼叫，可能造成服務中斷，需在 Agent 層級實施多重防護。
 
 ### 安全機制設計
 
@@ -190,15 +169,6 @@ flowchart TD
 
 Azure OpenAI GPT 模型的 Context Window 有限（如 GPT-4o 128k tokens），長時間對話若全部放入 Context，會超出限制且增加成本。
 
-### 記憶機制選擇
-
-本系統採用**三層記憶架構**：
-
-| 層級 | 機制 | 說明 |
-|------|------|------|
-| **短期記憶** | Sliding Window | 保留最近 N 輪對話（如最近 10 輪），直接放入 Context |
-| **中期摘要** | Summary Memory | 每隔 K 輪，使用 LLM 將歷史對話壓縮為摘要，取代原始對話 |
-| **長期記憶** | 資料庫儲存 | 完整對話記錄存入 Database，可供使用者查詢歷史 |
 
 ### 實作策略
 
@@ -303,33 +273,6 @@ Azure 雲端資源管理的後端服務。
 
 ---
 
-## 七、系統互動流程圖
-
-### 整體系統架構
-
-```mermaid
-graph TB
-    subgraph "使用者端"
-        U[User] --> CHAT[Chat 聊天介面]
-        ADM[Admin] --> FE[Frontend 後台管理]
-    end
-
-    subgraph "API 層"
-        CHAT --> CAPI[Chat-API]
-        FE --> BAPI[Backend-API]
-    end
-
-    subgraph "資料層"
-        CAPI --> DB[(Database)]
-        CAPI --> GPT[Azure OpenAI\nChatGPT]
-        CAPI --> EMB[Embeddings API]
-        CAPI --> SEARCH[Azure AI Search]
-        BAPI --> BLOB[Azure Blob Storage]
-        BAPI --> SEARCH
-        BAPI --> MON[監控 Metrics]
-    end
-```
-
 ---
 
 ## 附錄：AI Prompt 策略說明
@@ -343,5 +286,3 @@ graph TB
 5. **防禦性提示（Defensive Prompting）**：明確宣告禁止 Prompt Injection，保護系統安全
 
 ---
-
-*文檔版本：v1.0 | 最後更新：2025*
